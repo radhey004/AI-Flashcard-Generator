@@ -67,4 +67,15 @@ export interface AIGenerationResult {
   count: number;
 }
 
+export type AIJobState = 'queued' | 'waiting' | 'active' | 'completed' | 'failed' | 'delayed';
+
+export interface AIJobStatus {
+  jobId: string;
+  status: AIJobState;
+  progress: number | Record<string, unknown> | null;
+  result?: AIGenerationResult | null;
+  failedReason?: string | null;
+  attemptsMade?: number;
+}
+
 export type InputType = 'text' | 'pdf' | 'youtube';

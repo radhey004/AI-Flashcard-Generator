@@ -4,8 +4,8 @@ load_dotenv()
 
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, HttpUrl
-from typing import Optional
+from pydantic import BaseModel, field_validator
+from typing import Optional, Literal
 from services.gemini_service import generate_flashcards
 from services.pdf_service import extract_text_from_base64
 from services.youtube_service import get_transcript
@@ -30,6 +30,13 @@ class TextRequest(BaseModel):
     difficulty: Optional[str] = "medium"
     count: Optional[int] = 10
 
+    @field_validator("text")
+    @classmethod
+    def validate_text(cls, value: str) -> str:
+        if len(value.strip()) < 50:
+            raise ValueError("Text must be at least 50 characters")
+        return value
+
 
 class PDFRequest(BaseModel):
     pdf_base64: str
@@ -37,11 +44,25 @@ class PDFRequest(BaseModel):
     difficulty: Optional[str] = "medium"
     count: Optional[int] = 10
 
+    @field_validator("pdf_base64")
+    @classmethod
+    def validate_pdf_base64(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("PDF data is required")
+        return value
+
 
 class YouTubeRequest(BaseModel):
     url: str
     difficulty: Optional[str] = "medium"
     count: Optional[int] = 10
+
+    @field_validator("url")
+    @classmethod
+    def validate_url(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("YouTube URL is required")
+        return value
 
 
 def validate_difficulty(difficulty: str) -> str:
@@ -65,9 +86,6 @@ async def health():
 
 @app.post("/generate/text")
 async def generate_from_text(req: TextRequest):
-    if not req.text or len(req.text.strip()) < 50:
-        raise HTTPException(status_code=400, detail="Text must be at least 50 characters")
-
     difficulty = validate_difficulty(req.difficulty or "medium")
     count = validate_count(req.count or 10)
 
@@ -82,9 +100,6 @@ async def generate_from_text(req: TextRequest):
 
 @app.post("/generate/pdf")
 async def generate_from_pdf(req: PDFRequest):
-    if not req.pdf_base64:
-        raise HTTPException(status_code=400, detail="PDF data is required")
-
     difficulty = validate_difficulty(req.difficulty or "medium")
     count = validate_count(req.count or 10)
 
@@ -106,9 +121,6 @@ async def generate_from_pdf(req: PDFRequest):
 
 @app.post("/generate/youtube")
 async def generate_from_youtube(req: YouTubeRequest):
-    if not req.url:
-        raise HTTPException(status_code=400, detail="YouTube URL is required")
-
     difficulty = validate_difficulty(req.difficulty or "medium")
     count = validate_count(req.count or 10)
 

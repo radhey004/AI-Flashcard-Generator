@@ -45,19 +45,6 @@ export const decksApi = {
   getDashboardStats: () => api.get('/decks/stats/dashboard'),
 };
 
-export const flashcardsApi = {
-  getAll: (params?: { deckId?: string; dueOnly?: boolean; search?: string; tag?: string }) =>
-    api.get('/flashcards', { params }),
-  create: (data: { deckId: string; question: string; answer: string; difficulty?: string; tags?: string[] }) =>
-    api.post('/flashcards', data),
-  bulkCreate: (data: { deckId: string; flashcards: Array<{ question: string; answer: string; difficulty?: string; tags?: string[] }> }) =>
-    api.post('/flashcards/bulk', data),
-  update: (id: string, data: { question?: string; answer?: string; difficulty?: string; tags?: string[] }) =>
-    api.put(`/flashcards/${id}`, data),
-  delete: (id: string) => api.delete(`/flashcards/${id}`),
-  review: (id: string, rating: string) => api.post(`/flashcards/${id}/review`, { rating }),
-};
-
 export const aiApi = {
   generateFromText: (data: { text: string; difficulty?: string; count?: number }) =>
     api.post('/ai/generate/text', data),
@@ -72,6 +59,20 @@ export const aiApi = {
   },
   generateFromYouTube: (data: { url: string; difficulty?: string; count?: number }) =>
     api.post('/ai/generate/youtube', data),
+  getJobStatus: (jobId: string) => api.get(`/ai/job/${jobId}`),
+};
+
+export const flashcardsApi = {
+  getAll: (params?: { deckId?: string; dueOnly?: boolean; search?: string; tag?: string }) =>
+    api.get('/flashcards', { params }),
+  create: (data: { deckId: string; question: string; answer: string; difficulty?: string; tags?: string[] }) =>
+    api.post('/flashcards', data),
+  bulkCreate: (data: { deckId: string; flashcards: Array<{ question: string; answer: string; difficulty?: string; tags?: string[] }> }) =>
+    api.post('/flashcards/bulk', data),
+  update: (id: string, data: { question?: string; answer?: string; difficulty?: string; tags?: string[] }) =>
+    api.put(`/flashcards/${id}`, data),
+  delete: (id: string) => api.delete(`/flashcards/${id}`),
+  review: (id: string, rating: string) => api.post(`/flashcards/${id}/review`, { rating }),
 };
 
 export default api;

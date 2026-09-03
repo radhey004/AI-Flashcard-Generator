@@ -8,6 +8,8 @@ import { calculateSM2, mapRatingToQuality } from '../services/srsService';
 export const getFlashcards = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { deckId, dueOnly, search, tag } = req.query;
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(100, Math.max(1, Number(req.query.limit || 50)));
     const query: Record<string, unknown> = { userId: req.userId };
     if (deckId) query.deckId = deckId;
     if (dueOnly === 'true') query.nextReviewDate = { $lte: new Date() };
@@ -16,8 +18,11 @@ export const getFlashcards = async (req: AuthRequest, res: Response): Promise<vo
       { answer: { $regex: search, $options: 'i' } },
     ];
     if (tag) query.tags = tag;
-    const flashcards = await Flashcard.find(query).sort({ nextReviewDate: 1 });
-    res.json({ flashcards });
+    const [flashcards, total] = await Promise.all([
+      Flashcard.find(query).sort({ nextReviewDate: 1 }).skip((page - 1) * limit).limit(limit),
+      Flashcard.countDocuments(query),
+    ]);
+    res.json({ flashcards, page, limit, total });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: String(err) });
   }

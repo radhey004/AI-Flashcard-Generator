@@ -19,6 +19,7 @@ import Slider from '@mui/material/Slider';
 import Chip from '@mui/material/Chip';
 import IconButton from '@mui/material/IconButton';
 import Divider from '@mui/material/Divider';
+import LinearProgress from '@mui/material/LinearProgress';
 import TextFieldsIcon from '@mui/icons-material/TextFields';
 import PictureAsPdfIcon from '@mui/icons-material/PictureAsPdf';
 import SmartDisplayIcon from '@mui/icons-material/SmartDisplay';
@@ -28,7 +29,7 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import CheckIcon from '@mui/icons-material/Check';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import { aiApi, flashcardsApi } from '../../services/api';
-import type { GeneratedFlashcard, AIGenerationResult } from '../../types';
+import type { GeneratedFlashcard, AIGenerationResult, AIJobStatus } from '../../types';
 
 interface AIGenerateDialogProps {
   open: boolean;
@@ -47,14 +48,21 @@ const AIGenerateDialog: React.FC<AIGenerateDialogProps> = ({ open, onClose, deck
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
   const [result, setResult] = useState<AIGenerationResult | null>(null);
+  const [job, setJob] = useState<AIJobStatus | null>(null);
   const [editingCard, setEditingCard] = useState<{ index: number; question: string; answer: string } | null>(null);
   const [cards, setCards] = useState<GeneratedFlashcard[]>([]);
   const [saving, setSaving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const pollTimerRef = useRef<number | null>(null);
 
   const handleClose = () => {
+    if (pollTimerRef.current) {
+      window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = null;
+    }
     setResult(null);
     setCards([]);
+    setJob(null);
     setText('');
     setYoutubeUrl('');
     setPdfFile(null);
@@ -78,9 +86,42 @@ const AIGenerateDialog: React.FC<AIGenerateDialogProps> = ({ open, onClose, deck
         if (!youtubeUrl.trim()) { setError('Please enter a YouTube URL'); setLoading(false); return; }
         res = await aiApi.generateFromYouTube({ url: youtubeUrl, difficulty, count });
       }
-      const data = res.data as AIGenerationResult;
-      setResult(data);
-      setCards(data.flashcards);
+      const response = res.data as { jobId: string; status: string };
+      const initialJob: AIJobStatus = {
+        jobId: response.jobId,
+        status: response.status === 'queued' ? 'queued' : 'waiting',
+        progress: 0,
+        result: null,
+        failedReason: null,
+        attemptsMade: 0,
+      };
+      setJob(initialJob);
+      if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
+      pollTimerRef.current = window.setInterval(async () => {
+        try {
+          const statusRes = await aiApi.getJobStatus(response.jobId);
+          const status = statusRes.data as AIJobStatus;
+          setJob(status);
+          if (status.status === 'completed' && status.result) {
+            setResult(status.result);
+            setCards(status.result.flashcards);
+            if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+            setLoading(false);
+          }
+          if (status.status === 'failed') {
+            setError(status.failedReason || 'AI job failed');
+            if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
+            pollTimerRef.current = null;
+            setLoading(false);
+          }
+        } catch {
+          if (pollTimerRef.current) window.clearInterval(pollTimerRef.current);
+          pollTimerRef.current = null;
+          setError('Failed to fetch job status');
+          setLoading(false);
+        }
+      }, 2000);
     } catch (err: unknown) {
       const msg = (err as { response?: { data?: { message?: string; detail?: string } } })?.response?.data?.message
         || (err as { response?: { data?: { detail?: string } } })?.response?.data?.detail
@@ -136,6 +177,14 @@ const AIGenerateDialog: React.FC<AIGenerateDialogProps> = ({ open, onClose, deck
         {!result ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {error && <Alert severity="error">{error}</Alert>}
+            {job && !error && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+                <Typography variant="body2" color="text.secondary">
+                  Job status: {job.status} {(job.attemptsMade ?? 0) > 0 ? `(attempt ${(job.attemptsMade ?? 0) + 1})` : ''}
+                </Typography>
+                <LinearProgress variant="determinate" value={Math.max(5, Number(job.progress) || 0)} />
+              </Box>
+            )}
 
             <Tabs value={tab} onChange={(_, v) => setTab(v)} sx={{ borderBottom: 1, borderColor: 'divider' }}>
               <Tab icon={<TextFieldsIcon />} label="Text" iconPosition="start" />

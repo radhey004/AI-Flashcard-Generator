@@ -7,10 +7,15 @@ import { deleteCacheByPrefix } from '../services/cacheService';
 export const getDecks = async (req: AuthRequest, res: Response): Promise<void> => {
   try {
     const { search, tag } = req.query;
+    const page = Math.max(1, Number(req.query.page || 1));
+    const limit = Math.min(50, Math.max(1, Number(req.query.limit || 20)));
     const query: Record<string, unknown> = { userId: req.userId };
     if (search) query.name = { $regex: search, $options: 'i' };
     if (tag) query.tags = tag;
-    const decks = await Deck.find(query).sort({ updatedAt: -1 });
+    const [decks, total] = await Promise.all([
+      Deck.find(query).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit),
+      Deck.countDocuments(query),
+    ]);
     const now = new Date();
     const decksWithDue = await Promise.all(decks.map(async (deck) => {
       const dueCount = await Flashcard.countDocuments({
@@ -20,7 +25,7 @@ export const getDecks = async (req: AuthRequest, res: Response): Promise<void> =
       });
       return { ...deck.toObject(), dueCount };
     }));
-    res.json({ decks: decksWithDue });
+    res.json({ decks: decksWithDue, page, limit, total });
   } catch (err) {
     res.status(500).json({ message: 'Server error', error: String(err) });
   }

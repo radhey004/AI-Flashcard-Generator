@@ -37,5 +37,7 @@ const flashcardSchema = new Schema<IFlashcard>({
 
 flashcardSchema.index({ deckId: 1, userId: 1 });
 flashcardSchema.index({ userId: 1, nextReviewDate: 1 });
+flashcardSchema.index({ userId: 1, deckId: 1, question: 1 }, { unique: false });
+flashcardSchema.index({ userId: 1, createdAt: -1 });
 
 export default mongoose.model<IFlashcard>('Flashcard', flashcardSchema);

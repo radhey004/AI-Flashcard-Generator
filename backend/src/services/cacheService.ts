@@ -1,27 +1,40 @@
-import NodeCache from 'node-cache';
+import { getRedisClient } from '../config/redis';
+import { recordMetric } from './metricsService';
 
-const cache = new NodeCache({ stdTTL: 3600, checkperiod: 600 });
+const PREFIX = 'cache:';
 
-export function getCached<T>(key: string): T | undefined {
-  return cache.get<T>(key);
-}
-
-export function setCache<T>(key: string, value: T, ttl?: number): void {
-  if (ttl !== undefined) {
-    cache.set(key, value, ttl);
-  } else {
-    cache.set(key, value);
+export async function getCached<T>(key: string): Promise<T | undefined> {
+  const redis = getRedisClient();
+  const payload = await redis.get(`${PREFIX}${key}`);
+  if (!payload) {
+    recordMetric('cache_misses_total');
+    return undefined;
   }
+  recordMetric('cache_hits_total');
+  return JSON.parse(payload) as T;
 }
 
-export function deleteCache(key: string): void {
-  cache.del(key);
+export async function setCache<T>(key: string, value: T, ttlSeconds = 3600): Promise<void> {
+  const redis = getRedisClient();
+  await redis.set(`${PREFIX}${key}`, JSON.stringify(value), 'EX', ttlSeconds);
 }
 
-export function deleteCacheByPrefix(prefix: string): void {
-  const keys = cache.keys();
-  const matchingKeys = keys.filter(k => k.startsWith(prefix));
-  cache.del(matchingKeys);
+export async function deleteCache(key: string): Promise<void> {
+  const redis = getRedisClient();
+  await redis.del(`${PREFIX}${key}`);
+}
+
+export async function deleteCacheByPrefix(prefix: string): Promise<void> {
+  const redis = getRedisClient();
+  const match = `${PREFIX}${prefix}*`;
+  let cursor = '0';
+  do {
+    const [nextCursor, keys] = await redis.scan(cursor, 'MATCH', match, 'COUNT', 100);
+    cursor = nextCursor;
+    if (keys.length > 0) {
+      await redis.del(keys);
+    }
+  } while (cursor !== '0');
 }
 
 export function generateCacheKey(...parts: string[]): string {

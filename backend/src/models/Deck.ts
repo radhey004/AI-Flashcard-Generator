@@ -22,5 +22,6 @@ const deckSchema = new Schema<IDeck>({
 
 deckSchema.index({ userId: 1, createdAt: -1 });
 deckSchema.index({ userId: 1, tags: 1 });
+deckSchema.index({ userId: 1, updatedAt: -1 });
 
 export default mongoose.model<IDeck>('Deck', deckSchema);
